@@ -170,7 +170,7 @@ The *IP Communications Provider* service provides a suite of IP Communications D
  	| IOException                     | Some other I/O error occurs                                                                      | 	
   - since 1.0.4
 
-> **Note** 
+> [!WARNING] 
 > Ungraceful disconnects of a TCP/TLS connection may not register for up to 15-minutes after losing the connection.  
 >
 > Implementing device polling in the script will expedite the lost connection notification.
