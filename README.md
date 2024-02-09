@@ -1,5 +1,5 @@
-# muse-driver-amx-ipcomm
-The *IP Communications Provider* service provides a suite of IP Communications Drivers enabling the instancing of IP Controlled entities as Devices; allowing access to the Device instance(s) from the Mojo context in a script.  These drivers are distrubuted as a Muse Extension and the capabilities and configuration options of each of the Drivers are listed below.
+# AMX-IPComm
+The *IP Communications Provider* service provides a suite of IP Communications Drivers enabling the instancing of IP Controlled entities as Devices; allowing access to the Device instance(s) from the Mojo context in a script.  The capabilities and configuration options of each of the Drivers is listed below.
 
 
 ## Available Drivers
@@ -36,21 +36,25 @@ The *IP Communications Provider* service provides a suite of IP Communications D
 ### Advanced Configuration Drivers
 - TCP/TLS Client 
   - id:*ipcomm.tcp.client*
-  - TCP or TCP/TLS Client connection as per configuration.  
+  - TCP or TCP/TLS Client connection as per configuration. 
+  - The connection can be fully managed from a script. 
   - since 1.0.1
 - UDP Client  
   - id:*ipcomm.udp.client*
   - UDP Client connection as per configuration.  
+  - The connection can be fully managed from a script.
   - Supports bound or unbound receiver port.
   - since 1.0.1
 - SSH Client
   - id:*ipcomm.ssh.client*
   - SSH Client connection as per configuration.  
   - Supports password and/or passkey user authentication.
+  - The connection can be fully managed from the a script.
   - since 1.0.1
 - WS/WSS Client
   - id: *ipcomm.ws.client*
   - WS or WSS Client connection as per configuration.
+  - The connection can be fully managed from a script.
   - since 1.0.2
 
 
@@ -141,16 +145,35 @@ The *IP Communications Provider* service provides a suite of IP Communications D
 ### Advanced Driver API
 #### Parameters
 - connect
-  - Manages the connection.
+  - Manage the connection from a script.
   
 #### Commands
 - deviceonline
-  - sets the device online status.
+  - Sets the device online status when managing the connection from a script.
   
 #### Events 
 - fault
-  - Notification of error event in the Driver.
-  
+  - Notification of error event or thrown exception in the Driver.
+  - Arguments
+    - fault: Error or exception message when thrown. 
+    - exception: Exception class when thrown.
+   
+    | Exception Class                 | Description                                                                                     |
+	| ------------------------------- | ------------------------------------------------------------------------------------------------ |
+ 	| AlreadyConnectedException       | This channel is already connected                                                                |
+	| ConnectException                | An error occurred while attempting to connect a socket to a remote address and port              |
+ 	| ConnectionPendingException      | A non-blocking connection operation is already in progress on this channel                       |
+ 	| ClosedChannelException          | This channel is closed                                                                           |
+ 	| UnresolvedAddressException      | The given remote address is not fully resolved                                                   |
+ 	| UnsupportedAddressTypeException | The type of the given remote address is not supported                                            |
+ 	| SecurityException 		      | A security manager has been installed and it does not permit access to the given remote endpoint |
+ 	| IOException                     | Some other I/O error occurs                                                                      | 	
+  - since 1.0.4
+
+> **Note** 
+> Ungraceful disconnects of a TCP/TLS connection may not register for up to 15-minutes after losing the connection.  
+>
+> Implementing device polling in the script will expedite the lost connection notification.
   
 ## Basic Driver Examples
 
@@ -162,11 +185,7 @@ svsiEnc = context.devices.get("tcpclient");
 context.log.warn("test start");
 
 svsiEnc.receive.listen({ 
-    context.log.info("{}",new String(it.arguments.data));
-});
-
-svsiEnc.fault.listen({  
-    context.log.info("{}",new String(it.arguments.fault));
+    context.log.info("data: {}",new String(it.arguments.data));
 });
 
 t1 = context.services.get("timeline");
@@ -188,11 +207,7 @@ var svsiEnc = context.devices.get("tcpclient");
 context.log.warn("test start");
 
 svsiEnc.receive.listen(function(event) {
-    context.log.info(String(event.arguments.data));
-});
-
-svsiEnc.fault.listen(function(event) {
-    context.log.info(String(event.arguments.fault));
+    context.log.info("data: "+String(event.arguments.data));
 });
 
 var t1 = context.services.get("timeline");
@@ -201,53 +216,21 @@ t1.expired.listen(function(){
     context.log.info("polling");
 
     var msg = "getStatus\r";
-    svsiEnc.send(toUTF8Array(msg));
+    svsiEnc.send(msg);
 });
 
-function toUTF8Array(str) {
-    var utf8 = [];
-    for (var i=0; i < str.length; i++) {
-        var charcode = str.charCodeAt(i);
-        if (charcode < 0x80) utf8.push(charcode);
-        else if (charcode < 0x800) {
-            utf8.push(0xc0 | (charcode >> 6), 
-                      0x80 | (charcode & 0x3f));
-        }
-        else if (charcode < 0xd800 || charcode >= 0xe000) {
-            utf8.push(0xe0 | (charcode >> 12), 
-                      0x80 | ((charcode>>6) & 0x3f), 
-                      0x80 | (charcode & 0x3f));
-        }
-        // surrogate pair
-        else {
-            i++;
-            // UTF-16 encodes 0x10000-0x10FFFF by
-            // subtracting 0x10000 and splitting the
-            // 20 bits of 0x0-0xFFFFF into two halves
-            charcode = 0x10000 + (((charcode & 0x3ff)<<10)
-                      | (str.charCodeAt(i) & 0x3ff));
-            utf8.push(0xf0 | (charcode >>18), 
-                      0x80 | ((charcode>>12) & 0x3f), 
-                      0x80 | ((charcode>>6) & 0x3f), 
-                      0x80 | (charcode & 0x3f));
-        }
-    }
-    return utf8;
-}
+
 ```
 
 > Python 
 
 ```
 def statusResponse(event):
-    context.log.info(str(event.__dict__))  
-
-def onError(event):
-    context.log.info(str(event.__dict__))  
+    data = event.arguments['data'].decode('utf-8')
+    context.log.info(f"data: {data}")  
 
 svsiEnc = context.devices.get("tcpclient")
 svsiEnc.receive.listen(statusResponse)
-svsiEnc.fault.listen(onError)
 
 def getStatus(event):
     context.log.info("polling")
@@ -268,8 +251,11 @@ def statusResponse(event):
     test.connect = False
 
 def onError(event):
-    context.log.info(str(event.__dict__))  
-    test.connect = False
+    fault = event.arguments['fault']
+    context.log.info(f"fault: {fault}")  
+    exception = event.arguments['exception']
+    context.log.info(f"exception: {exception}")  
+    test.connect = False 
 
 test = context.devices.get("tcpclient")
 test.receive.listen(statusResponse)
@@ -278,6 +264,7 @@ test.fault.listen(onError)
 def onConnect(event):
     context.log.info(str(event.__dict__))
     test.deviceonline(event.newValue)
+    
 test.connect.watch(onConnect)
 
 def getStatus(event):
@@ -297,5 +284,4 @@ t1 = context.services.get("timeline")
 t1.start([10000], True)
 t1.expired.listen(connect)
 ```
-
 
