@@ -1,5 +1,5 @@
 # AMX-IPComm
-The *IP Communications Provider* service provides a suite of IP Communications Drivers enabling the instancing of IP Controlled entities as Devices; allowing access to the Device instance(s) from the Mojo context in a script.  The capabilities and configuration options of each of the Drivers is listed below.
+The *IP Communications Provider* service provides a suite of IP Communications Drivers enabling the instancing of IP Controlled entities as Devices; allowing access to the Device instance(s) from the Mojo context in a script.  This Driver Provider is distributed as a Muse Extension and the capabilities and configuration options of each of the Drivers is listed below.
 
 
 ## Available Drivers
